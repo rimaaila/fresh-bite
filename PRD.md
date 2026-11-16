@@ -1,308 +1,418 @@
-# PRD: Restaurant & Ready Meals Online Shop (v1)
+# Product Requirements Document: Perfume Shopping Site (v1)
 
-**Status:** Draft 1  
-**Stack:** Next.js, Supabase (Postgres), Vercel (Hobby/free plan)  
-**Version scope:** v1, manual payment via receipt upload (no payment gateway)
+| | |
+|---|---|
+| **Status** | Draft for review |
+| **Date** | 2026-11-15 |
+| **Stack** | Next.js (App Router), Supabase (Postgres, Auth, Storage), Vercel (free plan) |
+| **Market** | Maldives (currency: MVR) |
+| **Brand** | Elegant luxury perfume boutique; navy blue palette |
+
+---
 
 ## 1. Overview
 
-An online ordering website for a cafe/restaurant selling ready meals. Customers browse the menu, search and filter, choose variants (size, add-ons, etc.), place an order for **pickup from the cafe or home delivery within Malé and Hulhumalé**, and pay by uploading a payment receipt. Staff review receipts and move orders through a defined status flow from an admin dashboard.
+A single-brand online store for selling perfumes to customers in the Maldives. Visitors browse, search and filter products, add them to a cart, and check out as a guest or with an optional account. Because there is no payment gateway in v1, the customer pays by bank transfer and uploads a payment receipt (slip). Staff review the slip in the admin dashboard and move the order through its lifecycle.
 
-### Goals
+### 1.1 Goals
+1. Let customers discover and order perfumes with minimal friction.
+2. Give the team a complete admin dashboard to manage products, stock, orders and staff users.
+3. Run entirely on free tiers (Vercel, Supabase) for now, with a path to upgrade.
+4. Present a premium, elegant brand experience.
 
-- Let customers find and order food quickly on mobile and desktop.
-- Give the business full control of products, stock, orders and staff access from one dashboard.
-- Run on free tiers (Vercel Hobby + Supabase Free) while keeping a clean path to upgrade.
-- Be ready to add a payment gateway and the final logo later without rework.
+### 1.2 Non-Goals (v1)
+- Online payment gateway (card, BML/MIB gateways, etc.).
+- Automated customer notifications (email, SMS, WhatsApp). Customers use the order tracking page.
+- Multi-currency, multi-language (English only), or international shipping.
+- Reviews and ratings, wishlists, discount codes and loyalty points. These are candidates for v2.
+- Mobile apps.
 
-### Non-goals (v1)
+### 1.3 Success Metrics
+- A customer can complete checkout, including slip upload, in under 3 minutes on mobile.
+- Staff can process an order (review slip, approve, mark delivered) in under 1 minute.
+- Pages score 90+ on Lighthouse performance on mobile (storefront).
+- Zero overselling: stock never goes below 0.
 
-- Online payment gateway (card, wallet, etc.)
-- Loyalty points, coupons, reviews, wishlists
-- Native mobile apps
-- Multi-branch / multi-restaurant support
-- Automated delivery tracking or driver management
+---
 
 ## 2. Users and Roles
 
+### 2.1 Storefront users
 | User | Description |
 |---|---|
-| **Visitor** | Browses menu, searches, filters. No account needed. |
-| **Customer (guest)** | Places an order without an account, using name, phone and optional email. |
-| **Customer (account)** | Registered user with saved details and order history. |
-| **Admin** | Full access, including user management and settings. |
-| **Manager** | Manages products, stock, orders and views stats. Cannot manage users or system settings. |
-| **Staff** | Day-to-day order handling and stock updates. Limited access. |
+| Visitor | Browses, searches, filters. No account needed. |
+| Guest customer | Places an order with name, phone, address. Tracks it with order number + phone. |
+| Registered customer (optional) | Has an account for saved details and order history. |
 
-### Permission matrix (proposed)
+### 2.2 Admin users (staff)
+| Role | Purpose |
+|---|---|
+| **Super Admin** | Full access, including user management and store settings. |
+| **Manager** | Products, categories, orders, stats. No user management or settings. |
+| **Order Staff** | View orders, review slips, approve/reject, mark delivered. Read-only on products. |
+| **Inventory Staff** | Manage products, variants, stock, categories and images. No order access. |
 
-| Capability | Admin | Manager | Staff |
-|---|:-:|:-:|:-:|
-| View dashboard stats | Yes | Yes | Limited (today's orders only) |
-| View products | Yes | Yes | Yes |
-| Create / edit / delete products, categories, variants | Yes | Yes | No |
-| Update stock quantity / mark out of stock | Yes | Yes | Yes |
-| View orders and receipts | Yes | Yes | Yes |
-| Approve / reject receipts | Yes | Yes | Yes |
-| Mark order Delivered | Yes | Yes | Yes |
-| Edit or delete orders | Yes | Yes | No |
-| Add / edit / deactivate admin users and roles | Yes | No | No |
-| Site settings (bank details, delivery areas, delivery fee) | Yes | Yes (view only) | No |
+### 2.3 Permission matrix
+| Capability | Super Admin | Manager | Order Staff | Inventory Staff |
+|---|:-:|:-:|:-:|:-:|
+| View dashboard stats | ✅ | ✅ | Orders stats only | Inventory stats only |
+| Create/edit/delete products & variants | ✅ | ✅ | ❌ | ✅ |
+| Adjust stock | ✅ | ✅ | ❌ | ✅ |
+| Manage categories | ✅ | ✅ | ❌ | ✅ |
+| View orders | ✅ | ✅ | ✅ | ❌ |
+| Approve/reject slips, change order status | ✅ | ✅ | ✅ | ❌ |
+| Delete / cancel orders | ✅ | ✅ | ❌ | ❌ |
+| Manage admin users and roles | ✅ | ❌ | ❌ | ❌ |
+| Store settings (bank details, delivery, GST) | ✅ | ❌ | ❌ | ❌ |
+| View audit log | ✅ | ✅ | ❌ | ❌ |
 
-## 3. Branding and UI
+Rules: only Super Admin can create users or change roles. The last active Super Admin cannot be deleted or demoted. Users can be deactivated (not hard-deleted) to preserve audit history.
 
-- **Main color:** light green, with a fresh, food-friendly palette.
-- **Logo:** temporary free placeholder (a chef-hat or utensils icon from the Lucide icon set, ISC license, paired with the shop name as text). It lives in a single component and a single asset so the real logo can be swapped in one place later.
-- **Style:** clean, rounded cards, large food photography, generous spacing, mobile-first.
+---
 
-### Color palette (proposed)
+## 3. Storefront Requirements
 
-| Role | Color | Hex |
+### 3.1 Pages
+| Page | Route | Notes |
 |---|---|---|
-| Primary (light green) | Fresh leaf | `#8CC63F` |
-| Primary dark (buttons hover, headings) | Deep herb | `#4F8A1E` |
-| Primary light (backgrounds, chips) | Mint cream | `#E9F6D8` |
-| Page background | Soft cream | `#FAFDF5` |
-| Accent (CTAs, badges, sale tags) | Warm carrot | `#F4A03A` |
-| Text | Dark forest | `#1F2A1C` |
-| Muted text / borders | Sage grey | `#6B7A66` / `#DCE6D2` |
-| Success / Error / Warning | | `#3FA34D` / `#D64545` / `#E8B931` |
+| Home | `/` | Hero, featured products, new arrivals, categories, brand story strip |
+| Shop / listing | `/shop` | Search, filters, sort, pagination |
+| Category | `/category/[slug]` | Listing pre-filtered by category |
+| Product detail | `/product/[slug]` | Gallery, variant selector, stock status, description, notes |
+| Cart | `/cart` | Edit quantities, see totals |
+| Checkout | `/checkout` | Guest or logged-in; delivery details; order summary |
+| Payment / upload slip | `/order/[orderNumber]/pay` | Bank details + receipt upload |
+| Order tracking | `/track` | Order number + phone number lookup |
+| Account (optional) | `/account` | Profile, saved addresses, order history |
+| Login / Register | `/login`, `/register` | Email + password via Supabase Auth |
+| Static | `/about`, `/contact`, `/delivery-info`, `/privacy`, `/terms` | Simple content pages |
 
-Order status colors: Pending (grey), Slip Uploaded (amber), Approved (green), Rejected (red), Delivered (deep green/teal).
-
-## 4. Customer-Facing Features
-
-### 4.1 Pages
-
-1. **Home:** hero, featured categories, popular items, order-type info (cafe pickup and delivery to Malé and Hulhumalé), opening hours.
-2. **Menu / Shop:** product grid with search and filters.
-3. **Product detail:** image gallery, description, variants, price, stock status, add to cart.
-4. **Cart:** line items, quantity edit, variant display, subtotal.
-5. **Checkout:** customer details, order type, notes, order summary.
-6. **Payment / Upload receipt:** bank details, receipt upload, confirmation.
-7. **Order tracking:** order status page reachable by link, or by order number plus phone number for guests.
-8. **Account (optional):** sign up / login, order history, saved details.
-9. **Static pages:** About, Contact, Terms (basic).
-
-### 4.2 Search and filters
-
-- **Search:** by product name, description and category, with typo tolerance (Postgres full-text search plus `pg_trgm`). Debounced as-you-type with a results page.
+### 3.2 Search and Filters (required)
+- **Search:** keyword search across product name, brand, description and fragrance notes. Uses Postgres full-text search (with `pg_trgm` for typo tolerance) and updates results as the user types (debounced). Includes empty-state suggestions.
 - **Filters:**
   - Category (multi-select)
-  - Price range
+  - Price range (MVR, slider)
+  - Size/variant (e.g. 30 ml, 50 ml, 100 ml)
   - Availability (in stock only)
-  - Tags (e.g. vegetarian, spicy, halal, gluten-free; configurable by admin)
-- **Sort:** newest, price low to high, price high to low, name.
-- Filters and search are reflected in the URL so results are shareable and work with the back button.
-- Pagination or infinite scroll (default 12 to 24 items per load).
+  - Gender/target (Men, Women, Unisex)
+  - Fragrance family (Woody, Floral, Oriental, Fresh, etc.)
+  - Brand
+- **Sort:** Newest, Price low→high, Price high→low, Name A–Z.
+- **URL state:** filters and search live in the query string so results are shareable and survive refresh.
+- **Pagination:** 12–24 products per page (or "load more").
 
-### 4.3 Cart and checkout
+### 3.3 Product Display
+- Gallery with multiple images, zoom on hover/tap, and swipe on mobile.
+- Variant selector (size). Selecting a variant updates price, SKU and stock status.
+- Stock indicators: "In stock", "Only X left" (when stock ≤ threshold, default 5), "Out of stock" (add-to-cart disabled).
+- Prices are shown in MVR and **include GST**.
+- Details: description, fragrance notes (top/heart/base), brand, gender, family, concentration (EDP/EDT/etc.).
 
-- Cart persists in the browser for guests and in the database for logged-in users (merged on login).
-- **Order types:** Pickup from the cafe or Home delivery (each can be enabled or disabled by admin).
-  - Pickup: collect from the cafe at a preferred time.
-  - Delivery: Malé and Hulhumalé only; address, area, phone and delivery fee (flat fee or per area, set in settings). Addresses outside these two areas are rejected at checkout.
-- Customer fields: name, phone (required), email (optional), notes.
-- Stock is validated at checkout. Out-of-stock variants cannot be purchased.
-- Guests can check out without an account and are offered to create one afterward.
+### 3.4 Cart and Checkout
+- Cart persists in local storage for guests and in the database for logged-in users, with merge on login.
+- Cart validates stock on every change and at checkout.
+- **Checkout fields:** full name, phone (required), email (optional), delivery type, address, island/atoll, order notes.
+- **Delivery options:**
+  - **Greater Malé area** (Malé, Hulhumalé, Villimalé): **free doorstep delivery**.
+  - **Islands/atolls:** delivery to the **ferry** (customer picks up at the destination). Customer selects island and ferry/pickup point details. Any ferry-related cost is not charged in the system in v1 (configurable fee field available for later).
+- Order summary shows items, subtotal (GST-inclusive), the GST portion, delivery (Free), and total.
+- After placing the order, the customer is redirected to the **payment page** with the order number, bank transfer details and a slip upload field.
+- The customer can upload the slip right away or come back via `/track` to upload later.
 
-### 4.4 Receipt upload flow
+### 3.5 Payment by Receipt Upload
+- Store shows bank account details (bank name, account name, account number) from admin settings, plus the exact amount to pay and the order number as the payment reference.
+- Upload accepts JPG, PNG, WebP and PDF (PDFs stored as-is, size-limited). Max upload 10 MB before compression.
+- On successful upload the status changes from **Pending** to **Slip Uploaded**.
+- Customers may replace the slip while the order is Pending or Slip Uploaded.
+- If an order is **Rejected**, the customer sees the rejection reason on the tracking page and can upload a new slip, which returns the order to **Slip Uploaded** (open question 12.3).
 
-1. Order is created with status **Pending**. The customer sees the order summary and the business bank/transfer details.
-2. Customer uploads a receipt (image or PDF) from the order page.
-3. Status changes automatically to **Slip Uploaded**.
-4. If the order is **Rejected**, the customer sees the reason and can upload a new receipt, which returns it to **Slip Uploaded**.
+### 3.6 Order Tracking
+- Lookup by order number + phone number (guest) or via account.
+- Shows status timeline, items, totals, the slip thumbnail and the rejection reason when applicable.
 
-## 5. Product Management
+---
 
-### 5.1 Product data
+## 4. Order Lifecycle
 
-- Name, slug, description, category (one primary, optional extra tags), base price, status (active/draft/archived), featured flag.
-- **Images:** multiple per product, one primary, sortable.
-- **Variants:** each product can have 0 or more variants (e.g. Small / Medium / Large, or Spicy / Mild). Each variant has its own SKU (optional), price (or price adjustment), stock quantity and image (optional).
-- **Stock:** tracked per variant (or per product if no variants). Low-stock threshold with dashboard warning. Option to mark "unlimited / made to order" for items that don't need tracking.
-- **Categories:** name, slug, image (optional), sort order, active flag. Supports one level of nesting (category and subcategory) if needed.
+| Status | Meaning | Who changes it |
+|---|---|---|
+| **Pending** | Order placed, awaiting payment slip | System (on checkout) |
+| **Slip Uploaded** | Customer uploaded a receipt, awaiting review | System (on upload) |
+| **Approved** | Payment verified; order being prepared | Order Staff / Manager / Super Admin |
+| **Rejected** | Slip invalid or payment not received; includes reason | Order Staff / Manager / Super Admin |
+| **Delivered** | Handed to customer / delivered to ferry | Order Staff / Manager / Super Admin |
 
-### 5.2 Stock rules
+```
+Pending ──upload slip──► Slip Uploaded ──┬─► Approved ──► Delivered
+   ▲                                      └─► Rejected ──(re-upload)──► Slip Uploaded
+   └──────────── (customer can re-upload while Pending)
+```
 
-- Stock is **deducted when the order is placed** (reserved).
-- Stock is **restored** if the order is Rejected and not re-submitted within a set period, or if the order is cancelled by an admin.
-- Pending orders with no receipt after a configurable time (default 24 hours) can be flagged or auto-cancelled (see open questions).
-- All stock changes are logged (who, when, why).
+**Rules**
+- Valid transitions are enforced server-side. Delivered is final. Approved cannot go back to Pending.
+- **Stock handling:** stock is **reserved (decremented) when the order is placed** (Pending), so two customers cannot buy the last item. Stock is **restored** if the order is Rejected or cancelled by staff, and re-reserved if a Rejected order is revived by a new slip (fails with a clear message if stock is gone).
+- **Auto-expiry (recommended):** Pending orders with no slip after a configurable window (default 48 h) are automatically cancelled and stock released. This needs a scheduled job (Vercel Cron on the free plan is limited to daily runs, which is fine).
+- Every status change is recorded with user, timestamp and optional note.
+- A **Cancelled** internal status is available for staff to void orders (not customer-visible as a main step); see 12.3.
+
+---
+
+## 5. Admin Dashboard Requirements
+
+Route prefix: `/admin`. Separate login at `/admin/login`. Access is limited to users in the admin users table (staff). All admin routes and APIs enforce role permissions server-side and with Supabase RLS.
+
+### 5.1 Dashboard Home (stats)
+Date range selector (Today, 7 days, 30 days, This month, Custom) applies to the cards and charts.
+
+**KPI cards:** total revenue (approved + delivered orders, MVR), total orders, orders awaiting review (Slip Uploaded), pending orders, average order value, new customers, delivered orders, rejection rate.
+
+**Charts:**
+- Revenue over time (line)
+- Orders over time by status (stacked bar)
+- Order status distribution (donut)
+- Sales by category (bar)
+- Top 10 selling products (bar/table)
+- Delivery split: Greater Malé vs islands
+
+**Lists and alerts:**
+- Orders needing action (Slip Uploaded, oldest first)
+- Low stock and out-of-stock variants (below threshold)
+- Recent orders
+- Recent admin activity
+
+### 5.2 Product Management (full CRUD)
+- Product list: table with thumbnail, name, category, price range, total stock, status. Search, filter (category, status, stock), sort, bulk actions (publish/unpublish, delete, change category).
+- Create/edit product:
+  - Name, slug (auto, editable), brand, description, fragrance notes, gender, family, concentration
+  - Category (one primary, optional extras), tags
+  - Status: Draft / Published / Archived
+  - Featured flag
+  - **Variants:** each has label (e.g. 50 ml), SKU, price (MVR), optional compare-at price, stock quantity, active flag; add, edit, remove, reorder
+  - **Images:** multi-upload, drag-to-reorder, choose main image, alt text, delete
+  - SEO title/description
+- Soft delete (archive) by default. Hard delete is blocked if the product appears in orders.
+- Stock adjustment with a reason (restock, damaged, correction), stored in a stock movement log.
+- CSV import/export of products is a nice-to-have (v1.1).
+
+### 5.3 Category Management
+- Create/edit/delete/reorder categories. Optional parent/child. Image and description per category.
+- Cannot delete a category with products unless they are reassigned first.
+
+### 5.4 Order Management (full)
+- Order list with search (order number, name, phone), filters (status, date range, delivery type), sort, pagination, status badges, and CSV export.
+- Order detail: customer info, delivery details, items with variants, totals, status timeline, internal notes.
+- **Slip viewer:** large preview/zoom of the receipt, download, replace history.
+- Actions: Approve, Reject (reason required), Mark Delivered, Cancel (Manager+), edit delivery details/internal notes, add manual notes.
+- Create manual order (for phone/Viber/walk-in orders) — Manager+.
+- Printable invoice / packing slip (browser print/PDF) showing GST breakdown.
+- Bulk status updates for Approved → Delivered.
+
+### 5.5 User Management (Super Admin only)
+- List staff users with name, email, role, status, last login.
+- Add user (invite by email with temporary link or set up password), edit name/role, deactivate/reactivate, reset password, delete (only if never active).
+- Role assignment from the four roles above.
+- Audit log of user changes.
+- Customers (storefront accounts) are viewable in a separate read-only "Customers" list: name, phone, orders count, total spent.
+
+### 5.6 Store Settings (Super Admin)
+- Store name, contact details, logo placeholder
+- Bank account details shown at payment (supports multiple banks)
+- GST rate (default 8%, configurable) and GST registration number shown on invoices
+- Greater Malé area definition (list of locations) and islands/ferry list
+- Low-stock threshold, pending-order expiry window
+- Featured sections on the home page
+
+### 5.7 Audit Log
+- Records who did what and when: product changes, stock adjustments, order status changes, user and role changes, settings changes.
+
+---
 
 ## 6. Image Handling
 
-### 6.1 Product images (stored in the database, compressed, no visible quality loss)
+### 6.1 Storage
+Images are stored in **Supabase Storage** (same Supabase project as the database). The database stores only the file path and metadata. This is used instead of binary-in-Postgres to avoid hitting the 500 MB free database limit.
+- Bucket `product-images`: public read, staff-only write.
+- Bucket `receipts`: **private**; accessed only through short-lived signed URLs by the customer who owns the order (verified via order number + phone) and by authorised staff.
 
-- Uploaded from the admin product form (JPG, PNG, WebP; max 10 MB source).
-- Compression happens **in the browser before upload** to avoid Vercel's serverless request-size limit (about 4.5 MB per request on the free plan).
-- Target: lossless or visually lossless output (WebP lossless, or high-quality WebP/JPEG at roughly 90 to 95 quality with metadata stripped). Resolution is capped at a sensible maximum (e.g. 2000 px on the long edge) with no upscaling.
-- Two sizes are stored per image: **full** (detail page) and **thumbnail** (grid, around 400 px) so the menu loads quickly.
-- Stored in Postgres (`bytea`) in a dedicated `product_images` table, kept separate from the `products` table so product queries stay fast.
-- Served through a Next.js route handler with long-lived cache headers and ETags, and through `next/image` or the Vercel CDN cache where possible.
+### 6.2 Product images: compress without visible quality loss
+- Accept JPG, PNG, WebP, HEIC up to 15 MB each.
+- Convert to **WebP (high quality, ~90) or AVIF** with visually lossless settings; strip EXIF metadata (including GPS); cap the longest edge at 2400 px; keep the original aspect ratio.
+- Generate display sizes (e.g. 400, 800, 1600, 2400 px) and serve through `next/image` for responsive loading. Because Vercel's free plan has image optimization limits, pre-generated sizes in Storage are preferred.
+- Compression runs **in the browser before upload** (e.g. `browser-image-compression` or canvas) so uploads stay below Vercel's 4.5 MB serverless request limit; files go directly to Supabase Storage via signed upload URLs.
+- Validate dimensions (minimum 800 px longest edge recommended) and warn on low-resolution images.
 
-> **Important risk:** Supabase Free gives 500 MB of database space. Storing images in the DB will consume that quickly (roughly 150 to 250 products with several images each can approach the limit). Supabase Storage (1 GB on free) is the usual home for images. The architecture should hide image storage behind one service so it can be switched later without changing the UI.
+### 6.3 Receipts: compressed
+- Compress client-side to max 1600 px longest edge, JPEG/WebP quality ~70 (target under 300 KB), EXIF stripped. Text on the slip must remain legible.
+- PDFs are accepted up to 5 MB and stored unchanged.
+- Receipts are retained for a configurable period (default 12 months), then can be purged to save storage.
 
-### 6.2 Payment receipts (compressed)
+### 6.4 Storage budget (free tier, 1 GB)
+Rough estimate: 150 products × 4 images × ~600 KB with variants ≈ 400–700 MB. Receipts at ~250 KB each allow roughly 1,500 or more orders. The admin dashboard shows a storage usage indicator, with a warning at 80%.
 
-- Accepted: JPG, PNG, WebP, PDF (max 10 MB source).
-- Images are compressed client-side (e.g. max 1600 px, around 70 to 80 quality); readability of text and amounts must be preserved. PDFs are accepted as-is within a size limit.
-- Stored privately: only logged-in admin/manager/staff can view, plus the customer who owns the order (via a signed or token-protected link).
-- Receipts are never publicly cached.
+---
 
-## 7. Order Management
+## 7. Design and Branding
 
-### 7.1 Statuses
+### 7.1 Direction
+Quiet luxury: lots of whitespace, large product photography, refined serif headings, subtle motion, and no visual clutter. The look should feel like a high-end fragrance house.
 
-| Status | Meaning | Who/what triggers it |
+### 7.2 Color palette (navy-based)
+| Role | Name | Hex |
 |---|---|---|
-| **Pending** | Order placed, waiting for payment receipt | System, on order creation |
-| **Slip Uploaded** | Receipt received, awaiting review | System, on receipt upload |
-| **Approved** | Payment verified, order confirmed and being prepared | Admin / Manager / Staff |
-| **Rejected** | Receipt invalid or payment not received (reason required) | Admin / Manager / Staff |
-| **Delivered** | Order handed over (delivered or picked up) | Admin / Manager / Staff |
+| Primary | Deep Navy | `#0B1F3A` |
+| Primary dark (footer, hero overlay) | Midnight | `#071428` |
+| Primary light (hover, links) | Royal Navy | `#1B365D` |
+| Secondary | Slate Blue | `#3E5C8A` |
+| Accent | Champagne Gold | `#C9A96E` |
+| Background | Ivory | `#FAF8F4` |
+| Surface | Soft Mist | `#EEF2F8` |
+| Border | Pale Steel | `#D5DCE8` |
+| Text | Ink | `#12182B` |
+| Muted text | Gray Blue | `#5B667C` |
+| Success / Warning / Error | `#2F7D5B` / `#B7791F` / `#B23A48` |
 
-**Allowed transitions:** Pending to Slip Uploaded; Slip Uploaded to Approved or Rejected; Rejected to Slip Uploaded (customer re-uploads); Approved to Delivered. Admins and Managers can override a status with a required note. Every change is recorded in an order history log.
+Status badge colors: Pending (amber), Slip Uploaded (blue), Approved (green), Rejected (red), Delivered (navy).
+All text and interactive colors must meet WCAG AA contrast.
 
-### 7.2 Admin order features
+### 7.3 Typography
+- Headings: **Cormorant Garamond** (serif, elegant).
+- Body/UI: **Jost** or **Inter** (clean sans-serif).
+- Loaded with `next/font` (free, self-hosted via Google Fonts).
 
-- List with search (order number, customer name, phone) and filters (status, order type, date range).
-- Order detail: items and variants, customer info, order type details, receipt preview with zoom, status timeline, internal notes.
-- Actions: approve, reject (with reason), mark delivered, edit items or details (Admin/Manager), delete or archive (Admin).
-- Optional printable order slip / kitchen ticket.
-- Customer notification by email on status change if email is provided (see open questions for SMS/WhatsApp).
+### 7.4 Components and style
+- Thin borders, generous padding, small uppercase letter-spaced labels, gold hairline dividers, and minimal rounded corners (2–6 px).
+- Subtle fade/slide animations, with `prefers-reduced-motion` respected.
+- Admin dashboard uses the same palette in a cleaner, denser layout (sidebar navigation, data tables, charts in navy/gold/slate tones).
+- Responsive and mobile-first; most Maldivian shoppers will be on phones.
 
-## 8. Admin Dashboard
+### 7.5 Logo
+- Temporary: a free placeholder logo (an open-source icon, e.g. from Lucide/Phosphor, combined with a text wordmark in Cormorant Garamond), delivered as SVG in `/public/brand/`.
+- The logo is referenced from one component and one config file, so replacing it later with the final logo is a single-file swap (SVG plus favicon and OG image).
 
-Login at `/admin` with email and password via Supabase Auth. The admin area is protected by middleware and by database Row Level Security.
+---
 
-### 8.1 Dashboard (stats)
+## 8. Technical Architecture
 
-- Cards: today's orders, total revenue (Approved and Delivered), orders awaiting review (Slip Uploaded), pending orders, low-stock items.
-- Charts: orders and revenue over time (7 / 30 / 90 days), orders by status, orders by type (pickup, delivery).
-- Lists: best-selling products, latest orders, low-stock products.
-- Date range filter.
-
-### 8.2 Products page
-
-- Table with image, name, category, price, stock, status; search, filter and bulk actions (activate, archive, delete).
-- Create/edit form: details, images (drag and drop, reorder, set primary), variants editor, stock, category, tags, SEO fields.
-- Quick inline stock update.
-- Category management (add, edit, reorder, delete with safety check if products exist).
-
-### 8.3 Orders page
-
-As described in section 7.2.
-
-### 8.4 Users page (Admin only)
-
-- List of admin-side users with name, email, role, status, last login.
-- Add user (invite by email or create with temporary password), edit role, deactivate/reactivate, reset password, delete.
-- Roles: **Admin, Manager, Staff**. At least one active Admin must always exist.
-- Customer accounts are viewable in a separate read-only tab (name, email, order count).
-
-### 8.5 Settings (Admin)
-
-- Shop name, logo (placeholder now, replaceable later), contact details, opening hours.
-- Delivery areas (Malé, Hulhumalé), delivery fee, minimum order amount, cafe pickup address and hours.
-- Bank/transfer details shown to customers.
-- Pending-order expiry time, low-stock default threshold, currency.
-
-## 9. Technical Architecture
-
-| Area | Choice |
+### 8.1 Stack
+| Layer | Choice |
 |---|---|
-| Framework | Next.js (App Router) with TypeScript |
-| Styling / UI | Tailwind CSS and shadcn/ui, themed with the palette above |
+| Framework | Next.js (App Router, React Server Components, TypeScript) |
+| Styling | Tailwind CSS + shadcn/ui, themed to the palette |
 | Database | Supabase Postgres |
-| Auth | Supabase Auth (customers and admin users), role stored in a `profiles` table |
-| Security | Row Level Security on all tables, server-side checks in route handlers/server actions |
-| Search | Postgres full-text search plus `pg_trgm` |
-| Forms / validation | React Hook Form and Zod |
+| Auth | Supabase Auth (email + password) for admins and optional customers |
+| File storage | Supabase Storage |
+| Hosting | Vercel (free plan) |
+| Validation | Zod |
 | Charts | Recharts |
-| Image compression | Client-side (e.g. `browser-image-compression` or Canvas API) before upload |
-| Hosting | Vercel Hobby, with environment variables for Supabase keys |
-| Email | Resend or Supabase SMTP (free tier) |
+| Forms | React Hook Form |
 
-### 9.1 Core data model (high level)
+### 8.2 Data model (high level)
+- `profiles` (id → auth.users, full_name, phone, role: `customer | super_admin | manager | order_staff | inventory_staff`, is_active)
+- `categories` (id, name, slug, parent_id, image_path, sort_order)
+- `products` (id, name, slug, brand, description, notes_top/heart/base, gender, family, concentration, category_id, status, is_featured, search_vector, seo fields)
+- `product_variants` (id, product_id, label, sku, price_mvr, compare_at_price, stock, is_active, sort_order)
+- `product_images` (id, product_id, path, alt, sort_order, is_main)
+- `stock_movements` (id, variant_id, change, reason, order_id?, user_id, created_at)
+- `carts` / `cart_items` (for logged-in users)
+- `orders` (id, order_number, user_id?, customer_name, phone, email, delivery_type, island, ferry_details, address, notes, subtotal, gst_amount, delivery_fee, total, status, rejection_reason, expires_at, timestamps)
+- `order_items` (id, order_id, product_id, variant_id, name snapshot, variant label snapshot, unit_price snapshot, qty)
+- `payment_slips` (id, order_id, path, mime, size, uploaded_at, is_current)
+- `order_status_history` (id, order_id, from_status, to_status, changed_by, note, created_at)
+- `settings` (key/value JSON: bank accounts, GST, delivery areas, thresholds)
+- `audit_logs` (id, user_id, action, entity, entity_id, diff, created_at)
 
-- `profiles` (id, name, phone, role: customer/admin/manager/staff, is_active)
-- `categories` (id, name, slug, parent_id, sort_order, is_active)
-- `products` (id, name, slug, description, category_id, base_price, status, is_featured, track_stock, low_stock_threshold)
-- `product_variants` (id, product_id, name, sku, price, stock, is_active)
-- `product_images` (id, product_id, variant_id nullable, full_data bytea, thumb_data bytea, mime_type, sort_order, is_primary)
-- `tags` and `product_tags`
-- `carts` and `cart_items` (for logged-in users)
-- `orders` (id, order_number, user_id nullable, guest name/phone/email, order_type, pickup_time, delivery area/address/fee, subtotal, total, status, rejection_reason, notes)
-- `order_items` (order_id, product_id, variant_id, name snapshot, price snapshot, quantity)
-- `order_receipts` (order_id, data, mime_type, uploaded_at)
-- `order_status_history` (order_id, from, to, changed_by, note, timestamp)
-- `stock_movements` (variant_id, change, reason, order_id, user_id, timestamp)
-- `settings` (key, value)
+### 8.3 Security
+- Row Level Security on all tables. Public can read only published products and categories. Staff access is governed by role.
+- Admin role checks happen in Next.js middleware, server actions and RLS. The UI hiding alone is never relied upon.
+- Guest order/slip access uses order number + phone verification with rate limiting. Order numbers should be non-sequential (e.g. `AUR-7K2M9Q`) to prevent guessing.
+- Stock reservation and order creation run in a single Postgres transaction/function to prevent overselling.
+- The Supabase service-role key stays server-side only.
+- File uploads validated by type, size and magic bytes. Bot protection (Cloudflare Turnstile) on checkout and tracking lookups.
+- Secure headers, CSRF-safe server actions, and password rules enforced by Supabase Auth.
 
-### 9.2 Free-tier constraints to design around
+### 8.4 Performance and SEO
+- Server-rendered and cached product/category pages (ISR), `next/image`, lazy loading, and proper metadata, Open Graph tags, sitemap and `robots.txt`.
+- Structured data (Product schema) on product pages.
+- Indexes on slug, category, status, and full-text search vector.
 
-- **Vercel Hobby** is intended for personal, non-commercial use. A real business shop should plan to move to Vercel Pro (or another host) at launch.
-- Serverless function limits (short execution time, about 4.5 MB request body) mean heavy work such as image compression must happen in the browser.
-- **Supabase Free:** 500 MB database, projects pause after about a week of inactivity, limited backups. Production should use a paid plan or a keep-alive and a backup routine.
-- Cache images and public pages aggressively (ISR / CDN caching) to reduce database reads.
+### 8.5 Free-tier constraints and risks
+| Item | Constraint | Mitigation |
+|---|---|---|
+| **Vercel Hobby (free) terms** | The Hobby plan is for **non-commercial / personal use only**. A shop selling products is commercial use. | Fine for development and testing. Plan to upgrade to Vercel Pro before going live and taking real orders, or host elsewhere. |
+| Supabase free DB | 500 MB, shared compute | Images kept out of the DB |
+| Supabase free storage | 1 GB | Aggressive compression, receipt retention policy, usage warning |
+| Supabase inactivity | Free projects are **paused after about 1 week of inactivity** | Keep-alive cron or upgrade before launch |
+| Vercel function body limit | 4.5 MB | Direct-to-Storage uploads |
+| Vercel cron | Limited frequency on free plan | Daily expiry job |
+| No backups on free tier | Risk of data loss | Scheduled export (CSV/SQL dump) of key tables |
 
-## 10. Non-Functional Requirements
+---
 
-- **Performance:** menu page loads in under 2.5 s on a mid-range phone over 4G; thumbnails under about 60 KB each where quality allows.
-- **Security:** HTTPS only; RLS enforced; role checks on every admin action; private receipt access; rate limiting on login, search and upload endpoints; file type and size validation on the server.
-- **Accessibility:** WCAG AA contrast (verify the light green against text), keyboard navigation, alt text for images.
-- **SEO:** server-rendered product pages, clean slugs, meta tags, sitemap.
-- **Responsive:** mobile-first; admin usable on tablet.
-- **Reliability:** order creation and stock deduction happen in a single database transaction to prevent overselling.
-- **Auditability:** order status changes and stock movements are logged.
-- **Localization-ready:** text and currency are configurable (single language in v1).
+## 9. Non-Functional Requirements
+- **Responsive:** 360 px mobile to desktop.
+- **Accessibility:** WCAG 2.1 AA, keyboard navigation, alt text on images.
+- **Browsers:** latest two versions of Chrome, Safari, Edge, Firefox.
+- **Availability:** best effort on free tiers.
+- **Localization:** English only; MVR formatted as `MVR 1,250.00`; dates in the Maldives time zone (Indian/Maldives, UTC+5).
+- **Privacy:** collect only necessary data; a privacy policy page; receipts and phone numbers are never publicly accessible.
 
-## 11. Milestones
+---
+
+## 10. Release Plan
 
 | Phase | Scope |
 |---|---|
-| **1. Foundation** | Project setup, Supabase schema and RLS, auth, roles, design system and theme, placeholder logo |
-| **2. Catalog** | Categories, products, variants, stock, image upload and compression, admin product pages |
-| **3. Storefront** | Home, menu with search and filters, product page, cart |
-| **4. Orders** | Checkout (guest and account), order types, receipt upload, status flow, order tracking page, admin orders page |
-| **5. Dashboard and users** | Stats dashboard, user management, settings |
-| **6. Polish and launch** | Email notifications, SEO, accessibility pass, performance and security review, deployment |
+| **M1: Foundation** | Project setup, Supabase schema + RLS, auth, roles, design system and layout, logo placeholder |
+| **M2: Catalog** | Categories, products, variants, image upload/compression (admin), storefront listing, search, filters, product page |
+| **M3: Ordering** | Cart, checkout, stock reservation, payment page, slip upload/compression, tracking page |
+| **M4: Order admin** | Order list/detail, slip review, status workflow, history, invoices |
+| **M5: Dashboard & users** | Stats and charts, user management, settings, audit log |
+| **M6: Polish & launch** | Accessibility, performance, SEO, security review, test data, go-live checklist |
 
-## 12. Success Metrics
+---
 
-- Customers can complete an order and upload a receipt in under 3 minutes.
-- Receipt review turnaround time (Slip Uploaded to Approved/Rejected) is tracked on the dashboard.
-- Zero overselling incidents.
-- Menu page performance target met on mobile.
+## 11. Acceptance Criteria (summary)
+1. A visitor can search and combine filters (category, price, size, availability) and the results are correct and shareable via URL.
+2. Products display multiple images, variants with their own price and stock, and a correct stock state.
+3. A guest can place an order, see bank details, upload a slip, and track the order with order number + phone.
+4. Order statuses are limited to Pending, Slip Uploaded, Approved, Rejected, Delivered, and transitions are validated server-side.
+5. Concurrent orders for the last unit result in only one success.
+6. Product images are stored as compressed WebP/AVIF in Supabase Storage with no visible quality loss; receipts are compressed to roughly 300 KB or less.
+7. The admin dashboard shows the KPI cards, charts, and alerts listed in 5.1.
+8. Admins can fully create, read, update and delete (or archive) products, variants, categories and images, and fully manage orders.
+9. A Super Admin can add, edit, deactivate users and assign any of the four roles; other roles cannot access user management (even via direct URL or API).
+10. Greater Malé orders show free doorstep delivery; island orders capture island and ferry details.
+11. All prices are in MVR and include GST, with the GST portion shown on the order and invoice.
+12. The site uses the navy palette and the placeholder logo, which can be swapped in one place.
 
-## 13. Future Versions
+---
 
-- Payment gateway integration (cards/wallets), replacing or complementing receipt upload.
-- Coupons and loyalty, reviews, WhatsApp/SMS notifications.
-- Delivery zone mapping and driver assignment.
-- Final logo and brand refresh.
+## 12. Assumptions and Open Questions
 
-## 14. Assumptions and Open Questions
+### 12.1 Assumptions made in this draft
+- English only; MVR only; GST 8% included in all prices (rate editable in settings).
+- Customers are guests by default; accounts are optional.
+- Stock is reserved at order placement and released on rejection, cancellation or expiry.
+- No customer notifications in v1; the tracking page is the only customer-facing status channel.
+- Staff accounts are created only by a Super Admin.
 
-**Assumptions made in this draft (please confirm or correct):**
+### 12.2 Decisions made
+| Topic | Decision |
+|---|---|
+| Customer accounts | Guest checkout + optional account |
+| Currency | MVR |
+| Roles | Super Admin, Manager, Order Staff, Inventory Staff |
+| Image storage | Supabase Storage (not binary in Postgres) |
+| Delivery | Free doorstep in Greater Malé; islands delivered to the ferry |
+| GST | Prices include GST |
+| Notifications | None in v1 |
 
-1. Delivery covers only Malé and Hulhumalé, pickup is from the cafe, and both are paid by receipt upload.
-2. Stock is reserved when the order is placed and restored on rejection or cancellation.
-3. A rejected customer can upload a new receipt.
-4. Staff may approve/reject receipts; if you want only Admin/Manager to approve payments, the matrix changes.
-5. Email is the only notification channel in v1.
-6. One language and one currency, configurable in settings.
-
-**Open questions:**
-
-1. Which currency and which bank details/transfer methods should be shown for payment?
-2. Is delivery a flat fee, per area, or free above a minimum amount? Should the delivery fee differ between Malé and Hulhumalé?
-3. Do you need a "Cancelled" status in addition to the five you listed?
-4. Should unpaid Pending orders auto-cancel after a set time (e.g. 24 hours)?
-5. Do you want pre-orders or scheduled pickup/delivery times, or only "as soon as possible"?
-6. Do you want WhatsApp or SMS notifications instead of (or in addition to) email?
-7. Are you comfortable storing images in the database given the 500 MB free limit, or should we use Supabase Storage behind the same interface?
-8. Do you need item-level options beyond variants (e.g. extra toppings with their own prices)?
-9. Roughly how many products and how many orders per day do you expect?
-10. Do you have a shop name and domain yet?
+### 12.3 Open questions
+1. Which exact locations count as "Greater Malé area" (Malé, Hulhumalé, Villimalé, others)?
+2. For island orders, who pays the ferry cost, and do you need ferry names/times captured or only the island name?
+3. After a **Rejected** slip, should the customer be allowed to re-upload (as drafted), or is Rejected final? Do you also want a separate **Cancelled** status, or should cancelled orders reuse Rejected?
+4. Bank details: which banks (BML, MIB, others), and should several accounts be shown?
+5. Product catalog size at launch (roughly how many products and variants) so storage can be planned?
+6. Business name, brand name and domain, and whether a GST registration number should appear on invoices.
+7. Do you want a Pending-order auto-expiry (suggested 48 h), and is that window right?
+8. Since Vercel's free Hobby plan is not permitted for commercial use, is the plan to upgrade at launch?
